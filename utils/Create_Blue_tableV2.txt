@@ -1,0 +1,104 @@
+Sub CrearTablaAzulV2()
+    Dim wsDatos As Worksheet
+    Dim wsResumen As Worksheet
+    Dim rangoInicio As Range
+    Dim filaResumen As Long
+    Dim contadorZona As Long
+    Dim miTabla As ListObject
+    Dim arrEncabezados() As Variant
+    Dim i As Long, numColumnas As Long
+    
+    ' Configurar hojas
+    Set wsDatos = ThisWorkbook.Worksheets("Datos")
+    Set wsResumen = ThisWorkbook.Worksheets("Resumen")
+    
+    ' Limpiar área previa (desde B5 hasta Z100 para cubrir columnas dinámicas)
+    wsResumen.Range("B5:Z100").ClearContents
+    On Error Resume Next
+    wsResumen.ListObjects("TablaResumenAzul").Delete
+    On Error GoTo 0
+    
+    ' ========================
+    ' OBTENER ENCABEZADOS DINÁMICOS:
+    ' - "Secciones" desde C17
+    ' - Resto desde J18 hacia abajo (hasta 10 valores no vacíos)
+    ' ========================
+    ReDim arrEncabezados(1 To 1)
+    arrEncabezados(1) = wsDatos.Range("C17").Value ' Encabezado fijo
+    
+    ' Buscar hasta 10 valores no vacíos desde J18 hacia abajo
+    For i = 0 To 9
+        If wsDatos.Range("J18").Offset(i, 0).Value <> "" Then
+            ReDim Preserve arrEncabezados(1 To UBound(arrEncabezados) + 1)
+            arrEncabezados(UBound(arrEncabezados)) = wsDatos.Range("J18").Offset(i, 0).Value
+        End If
+    Next i
+    
+    ' Si solo está "Secciones" y no hay más encabezados, mostrar error
+    If UBound(arrEncabezados) = 1 Then
+        MsgBox "No se encontraron encabezados adicionales en J18:J27.", vbExclamation
+        Exit Sub
+    End If
+    
+    numColumnas = UBound(arrEncabezados)
+    
+    ' ========================
+    ' CREAR ENCABEZADOS EN RESUMEN
+    ' ========================
+    With wsResumen.Range("B5").Resize(1, numColumnas)
+        .Value = arrEncabezados
+        .Font.Bold = True
+        .Font.Color = RGB(255, 255, 255)
+        .Interior.Color = RGB(31, 78, 121)
+        .HorizontalAlignment = xlCenter
+    End With
+    
+    ' ========================
+    ' LLENAR FILAS DESDE C18 (DATOS)
+    ' ========================
+    Set rangoInicio = wsDatos.Range("C18") ' Datos para "Secciones"
+    filaResumen = 6
+    contadorZona = 0
+    
+    Do While rangoInicio.Offset(contadorZona, 0).Value <> ""
+        With wsResumen.Range("B" & filaResumen)
+            .Value = rangoInicio.Offset(contadorZona, 0).Value ' Columna "Secciones"
+            .Offset(0, 1).Resize(1, numColumnas - 1).Value = Array("") ' Columnas vacías
+        End With
+        
+        ' Alternar colores de fila (aplica a todas las columnas)
+        If contadorZona Mod 2 = 0 Then
+            wsResumen.Range("B" & filaResumen).Resize(1, numColumnas).Interior.Color = RGB(197, 217, 241)
+        Else
+            wsResumen.Range("B" & filaResumen).Resize(1, numColumnas).Interior.Color = RGB(233, 242, 250)
+        End If
+        
+        filaResumen = filaResumen + 1
+        contadorZona = contadorZona + 1
+    Loop
+    
+    ' ========================
+    ' CREAR TABLA DINÁMICA
+    ' ========================
+    If filaResumen > 6 Then
+        Set miTabla = wsResumen.ListObjects.Add( _
+            SourceType:=xlSrcRange, _
+            Source:=wsResumen.Range("B5").Resize(filaResumen - 5, numColumnas), _
+            XlListObjectHasHeaders:=xlYes)
+        
+        miTabla.Name = "TablaResumenAzul"
+        miTabla.TableStyle = ""
+        miTabla.Range.Borders.LineStyle = xlNone
+        
+        With miTabla.DataBodyRange
+            .Font.Color = RGB(0, 0, 0)
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+        End With
+        
+        ' Ajustar ancho de columnas
+        wsResumen.Columns("B").Resize(, numColumnas).AutoFit
+    End If
+    
+    MsgBox "Tabla creada en B5 con éxito!", vbInformation
+End Sub
